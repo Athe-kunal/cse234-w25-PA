@@ -494,7 +494,7 @@ class DivByConstOp(Op):
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         """Return the element-wise division of the input value and the constant."""
         assert len(input_values) == 1
-        return input_values / node.constant
+        return input_values[0] / node.constant
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of division node, return partial adjoint to the input."""
@@ -563,7 +563,11 @@ class MatMulOp(Op):
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of matmul node, return partial adjoint to each input."""
-        """TODO: your code here"""
+        node_a, node_b = node.inputs[0], node.inputs[1]
+        return [
+            matmul(output_grad, transpose(node_b, -1, -2)),
+            matmul(node_a, output_grad),
+        ]
 
 
 class SoftmaxOp(Op):
@@ -580,11 +584,20 @@ class SoftmaxOp(Op):
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         """Return softmax of input along specified dimension."""
         assert len(input_values) == 1
-        """TODO: your code here"""
+        max_elems, _ = torch.max(input_values[0], dim=node.dim, keepdim=True)
+        x_shifted = input_values[0] - max_elems
+        x_exp = torch.exp(x_shifted)
+        y = x_exp / torch.sum(x_exp, dim=node.dim, keepdim=True)
+        node.attrs["softmax_y"] = y
+        return y
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of softmax node, return partial adjoint to input."""
-        """TODO: your code here"""
+        # diag(y) - yy^T
+        y = node.softmax_y
+        dot = sum_op(mul(output_grad, y), dim=node.dim, keepdim=True)
+        grad_x = mul(y, sub(output_grad, dot))
+        return [grad_x]
 
 
 class LayerNormOp(Op):
@@ -603,7 +616,9 @@ class LayerNormOp(Op):
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         """Return layer normalized input."""
         assert len(input_values) == 1
-        """TODO: your code here"""
+        mean_val = torch.mean(input_values[0], dim=-1)
+        std_val = torch.var(input_values[0], dim=-1)
+        return (input_values[0] - mean_val) / torch.sqrt(std_val + node.eps)
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """
