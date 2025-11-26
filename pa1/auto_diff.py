@@ -614,18 +614,60 @@ class LayerNormOp(Op):
         )
 
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
-        """Return layer normalized input."""
         assert len(input_values) == 1
-        mean_val = torch.mean(input_values[0], dim=-1)
-        std_val = torch.var(input_values[0], dim=-1)
-        return (input_values[0] - mean_val) / torch.sqrt(std_val + node.eps)
+        x = input_values[0]
+        # Suppose you want to take norm over the alst 3 dimension of [64,32,32,32]
+        # dims = (-3, -2, -1)
+        norm_shape = node.normalized_shape
+        # normalize over the last len(norm_shape) dims
+        k = len(norm_shape)
+        dims = tuple(range(-k, 0))
+
+        mean = torch.mean(x, dim=dims, keepdim=True)
+        # var = torch.mean((x - mean) ** 2, dim=dims, keepdim=True)
+        var = torch.var(x, unbiased=False, dim=dims, keepdim=True)
+        inv_std = torch.rsqrt(var + node.eps)
+
+        y = (x - mean) * inv_std
+        return y
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """
         Given gradient of the LayerNorm node wrt its output, return partial
         adjoint (gradient) wrt the input x.
         """
-        """TODO: your code here"""
+        x = node.inputs[0]
+        norm_shape: tuple[int, ...] = node.normalized_shape
+
+        k = len(norm_shape)
+        dims = tuple(range(-k, 0))
+
+        # m = number of elements per normalized group
+        m = 1
+        for s in norm_shape:
+            m *= s
+        m_f = float(m)
+
+        # Rebuild forward stats as Nodes
+        mu = mean(x, dim=dims, keepdim=True)
+        z = sub(x, mu)
+        var = mean(power(z, 2.0), dim=dims, keepdim=True)
+        inv_std = power(add_by_const(var, node.eps), -0.5)
+        x_hat = mul(z, inv_std)
+
+        # sum_g = Σ g ,  sum_g_xhat = Σ g * x_hat over normalized dims
+        sum_g = sum_op(output_grad, dim=dims, keepdim=True)
+        sum_g_xhat = sum_op(mul(output_grad, x_hat), dim=dims, keepdim=True)
+
+        # term = m*g - sum_g - x_hat * sum_g_xhat
+        term = sub(
+            sub(mul_by_const(output_grad, m_f), sum_g),
+            mul(x_hat, sum_g_xhat),
+        )
+
+        # grad_x = (inv_std / m) * term
+        grad_x = mul_by_const(mul(inv_std, term), 1.0 / m_f)
+        return [grad_x]
 
 
 class ReLUOp(Op):
