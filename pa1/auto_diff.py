@@ -917,9 +917,11 @@ def gradients(output_node: Node, nodes: List[Node]) -> List[Node]:
         # accumulate into each input's grad
         for inp, g_inp in zip(node.inputs, input_grads):
             if inp in node_to_grad:
+                # accumulate gradient to each input existing gradient
                 node_to_grad[inp] = node_to_grad[inp] + g_inp
             else:
                 node_to_grad[inp] = g_inp
+                # if no existing gradient, create a new one
 
     # return gradient nodes for the specific targets
     return [node_to_grad.get(n, zeros_like(n)) for n in nodes]
