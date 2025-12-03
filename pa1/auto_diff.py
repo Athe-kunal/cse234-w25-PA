@@ -559,7 +559,7 @@ class MatMulOp(Op):
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         """Return the matrix multiplication result of input values."""
         assert len(input_values) == 2
-        return input_values[0] @ input_values[1]
+        return input_values[0].matmul(input_values[1])
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of matmul node, return partial adjoint to each input."""
@@ -791,7 +791,7 @@ sub = SubOp()
 broadcast = BroadcastOp()
 
 
-def topological_sort(nodes):
+def topological_sort(nodes: List[Node] | Node):
     """Helper function to perform topological sort on nodes.
 
     Parameters
@@ -804,7 +804,25 @@ def topological_sort(nodes):
     List[Node]
         Nodes in topological order
     """
-    """TODO: your code here"""
+    if isinstance(nodes, Node):
+        nodes = [nodes]
+
+    visited: set[Node] = set()
+    all_nodes: list[Node] = []
+
+    def dfs(node: Node) -> None:
+        if node in visited:
+            return
+        visited.add(node)
+        for inp in node.inputs:
+            dfs(inp)
+        all_nodes.append(
+            node
+        )  # post-order, after all the inputs of the node is processed, we add it
+
+    for out in nodes:
+        dfs(out)
+    return all_nodes
 
 
 class Evaluator:
@@ -839,7 +857,26 @@ class Evaluator:
         eval_values: List[torch.Tensor]
             The list of values for nodes in `eval_nodes` field.
         """
-        """TODO: your code here"""
+        topo = topological_sort(self.eval_nodes)
+        node_to_value: dict[Node, torch.Tensor] = {}
+
+        for node, value in input_values.items():
+            node_to_value[node] = value
+
+        for node in topo:
+            if node in node_to_value:
+                continue
+
+            input_tensors: list[torch.Tensor] = []
+            for inp in node.inputs:
+                if inp not in node_to_value:
+                    raise ValueError(
+                        f"Value for input node {inp} not provided in input_values."
+                    )
+                input_tensors.append(node_to_value[inp])
+            node_to_value[node] = node.op.compute(node, input_tensors)
+
+        return [node_to_value[node] for node in self.eval_nodes]
 
 
 def gradients(output_node: Node, nodes: List[Node]) -> List[Node]:
@@ -860,4 +897,29 @@ def gradients(output_node: Node, nodes: List[Node]) -> List[Node]:
     grad_nodes: List[Node]
         A list of gradient nodes, one for each input nodes respectively.
     """
-    """TODO: your code here"""
+    topo = topological_sort([output_node])  # all nodes leading to output
+    node_to_grad: dict[Node, Node] = {}
+
+    # seed gradient at output: d(output)/d(output) = 1
+    node_to_grad[output_node] = ones_like(output_node)
+
+    # traverse graph in reverse topological order
+    for node in reversed(topo):
+        if node not in node_to_grad:
+            # no gradient flows through this node
+            continue
+
+        grad_wrt_node = node_to_grad[node]  # dL/d(node)
+
+        # get gradients wrt inputs using the op-specific rule
+        input_grads: list[Node] = node.op.gradient(node, grad_wrt_node)
+
+        # accumulate into each input's grad
+        for inp, g_inp in zip(node.inputs, input_grads):
+            if inp in node_to_grad:
+                node_to_grad[inp] = node_to_grad[inp] + g_inp
+            else:
+                node_to_grad[inp] = g_inp
+
+    # return gradient nodes for the specific targets
+    return [node_to_grad.get(n, zeros_like(n)) for n in nodes]
