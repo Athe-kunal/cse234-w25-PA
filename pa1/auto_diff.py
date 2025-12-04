@@ -566,7 +566,7 @@ class MatMulOp(Op):
         node_a, node_b = node.inputs[0], node.inputs[1]
         return [
             matmul(output_grad, transpose(node_b, -1, -2)),
-            matmul(node_a, output_grad),
+            matmul(transpose(node_a, -1, -2), output_grad),
         ]
 
 
@@ -594,9 +594,12 @@ class SoftmaxOp(Op):
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
         """Given gradient of softmax node, return partial adjoint to input."""
         # diag(y) - yy^T
-        y = node.softmax_y
-        dot = sum_op(mul(output_grad, y), dim=node.dim, keepdim=True)
-        grad_x = mul(y, sub(output_grad, dot))
+        # dot = sum_op(mul(output_grad, y), dim=node.dim, keepdim=True)
+        # grad_x = mul(y, sub(output_grad, dot))
+        # return [grad_x]
+        dot = sum_op(mul(node, node), dim=node.dim, keepdim=True)
+        diag_y = mul(node, transpose(ones_like(node), -2, -1))
+        grad_x = mul(output_grad, sub(diag_y, dot))
         return [grad_x]
 
 
