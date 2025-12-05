@@ -588,7 +588,6 @@ class SoftmaxOp(Op):
         x_shifted = input_values[0] - max_elems
         x_exp = torch.exp(x_shifted)
         y = x_exp / torch.sum(x_exp, dim=node.dim, keepdim=True)
-        node.attrs["softmax_y"] = y
         return y
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
