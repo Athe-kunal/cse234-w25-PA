@@ -870,7 +870,11 @@ class Evaluator:
                         f"Value for input node {inp} not provided in input_values."
                     )
                 input_tensors.append(node_to_value[inp])
-            node_to_value[node] = node.op.compute(node, input_tensors)
+            try:
+                node_to_value[node] = node.op.compute(node, input_tensors)
+            except Exception as e:
+                print(f"Error computing node {node}: {e}")
+                raise e
 
         return [node_to_value[node] for node in self.eval_nodes]
 

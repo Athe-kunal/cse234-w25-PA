@@ -347,14 +347,14 @@ def train_model():
             input_values={
                 X: X_batch,
                 y_groundtruth: y_batch,
-                W_Q: W_Q_val,
-                W_K: W_K_val,
-                W_V: W_V_val,
-                W_O: W_O_val,
-                W_1: W_1_val,
-                b_1: b_1_val,
-                W_2: W_2_val,
-                b_2: b_2_val,
+                W_Q: torch.tensor(W_Q_val),
+                W_K: torch.tensor(W_K_val),
+                W_V: torch.tensor(W_V_val),
+                W_O: torch.tensor(W_O_val),
+                W_1: torch.tensor(W_1_val),
+                b_1: torch.tensor(b_1_val),
+                W_2: torch.tensor(W_2_val),
+                b_2: torch.tensor(b_2_val),
             }
         )
         return result
