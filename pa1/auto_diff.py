@@ -742,23 +742,21 @@ class MeanOp(Op):
 
     def compute(self, node: Node, input_values: List[torch.Tensor]) -> torch.Tensor:
         assert len(input_values) == 1
-        node.attrs["input_shape"] = tuple(input_values[0].shape)
         y = torch.mean(input=input_values[0], dim=node.dim, keepdim=node.keepdim)
-        node.attrs["output_shape"] = tuple(y.shape)
         return y
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
-        dims = node.dim
-        input_shape = node.input_shape
-        output_shape = node.output_shape
+        # Compute count dynamically: create ones tensor and sum along reduction dims
+        input_node = node.inputs[0]
+        ones = ones_like(input_node)
+        count = sum_op(ones, dim=node.dim, keepdim=node.keepdim)
+        scaled = div(output_grad, count)
 
-        count = 1
-        for d in dims:
-            count *= input_shape[d]
-        scale = 1.0 / count
-        scaled = mul_by_const(output_grad, scale)
-
-        return [broadcast(scaled, input_shape=output_shape, target_shape=input_shape)]
+        # Use expand_as with the original input node to restore shape
+        if node.keepdim:
+            return [scaled]
+        else:
+            return [expand_as(scaled, input_node)]
 
 
 # Create global instances of ops.
@@ -914,6 +912,9 @@ def gradients(output_node: Node, nodes: List[Node]) -> List[Node]:
 
         # accumulate into each input's grad
         for inp, g_inp in zip(node.inputs, input_grads):
+            # Skip placeholders - they don't need gradients computed through them
+            if isinstance(inp.op, PlaceholderOp):
+                continue
             if inp in node_to_grad:
                 # accumulate gradient to each input existing gradient
                 node_to_grad[inp] = node_to_grad[inp] + g_inp

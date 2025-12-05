@@ -119,8 +119,9 @@ def softmax_loss(Z: ad.Node, y_one_hot: ad.Node, batch_size: int) -> ad.Node:
         ad.mul(y_one_hot, log_probs), -1
     )  # (batch_size, num_classes)
     loss_sum = ad.sum_op(loss_per_example, dim=(1,), keepdim=False)  # (batch_size,)
-    mean_loss = ad.mean(loss_sum, dim=(0,), keepdim=False)  # scalar ()
-    return mean_loss
+    # mean_loss = ad.mean(loss_sum, dim=(0,), keepdim=False)  # scalar ()
+    # return mean_loss
+    return ad.div_by_const(loss_sum, batch_size)
 
 
 def sgd_epoch(
