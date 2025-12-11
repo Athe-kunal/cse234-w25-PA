@@ -911,6 +911,10 @@ def gradients(output_node: Node, nodes: List[Node]) -> List[Node]:
 
         grad_wrt_node = node_to_grad[node]  # dL/d(node)
 
+        # Placeholders are leaves: they can receive gradients but do not backprop further.
+        if isinstance(node.op, PlaceholderOp):
+            continue
+
         # get gradients wrt inputs using the op-specific rule
         input_grads: list[Node] = node.op.gradient(node, grad_wrt_node)
 

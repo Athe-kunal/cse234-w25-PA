@@ -1,9 +1,6 @@
-import functools
-from typing import Callable, Tuple, List
+from typing import Callable, List
 
 import numpy as np
-from sklearn.datasets import load_digits
-from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from sklearn.preprocessing import OneHotEncoder
 import auto_diff as ad
@@ -58,12 +55,9 @@ def transformer(
     # X: (batch_size, seq_length, model_dim)
     # nodes order:
     W_Q_val, W_K_val, W_V_val, W_1_val, b_1_val, W_2_val, b_2_val, W_O_val = nodes
-    attn = single_head_attention(
+    attn_out = single_head_attention(
         X, W_Q_val, W_K_val, W_V_val, W_O_val, model_dim
     )  # (batch_size, seq_length, model_dim)
-
-    # Residual connection (add input to attn output)
-    attn_out = attn + X
 
     # LayerNorm after attention
     norm1 = ad.layernorm(attn_out, normalized_shape=[model_dim], eps=eps)  # last dim
@@ -119,9 +113,9 @@ def softmax_loss(Z: ad.Node, y_one_hot: ad.Node, batch_size: int) -> ad.Node:
         ad.mul(y_one_hot, log_probs), -1
     )  # (batch_size, num_classes)
     loss_sum = ad.sum_op(loss_per_example, dim=(1,), keepdim=False)  # (batch_size,)
-    # mean_loss = ad.mean(loss_sum, dim=(0,), keepdim=False)  # scalar ()
-    # return mean_loss
-    return ad.div_by_const(loss_sum, batch_size)
+    mean_loss = ad.mean(loss_sum, dim=(0,), keepdim=False)  # scalar ()
+    return mean_loss
+    # return ad.div_by_const(loss_sum, batch_size)
 
 
 def sgd_epoch(
@@ -334,6 +328,15 @@ def train_model():
     b_1_val = np.random.uniform(-stdv, stdv, (model_dim,))
     b_2_val = np.random.uniform(-stdv, stdv, (num_classes,))
 
+    W_Q_val = torch.tensor(W_Q_val)
+    W_K_val = torch.tensor(W_K_val)
+    W_V_val = torch.tensor(W_V_val)
+    W_O_val = torch.tensor(W_O_val)
+    W_1_val = torch.tensor(W_1_val)
+    W_2_val = torch.tensor(W_2_val)
+    b_1_val = torch.tensor(b_1_val)
+    b_2_val = torch.tensor(b_2_val)
+
     def f_run_model(
         X_batch: torch.Tensor, y_batch: torch.Tensor, model_weights: List[torch.Tensor]
     ):
@@ -347,14 +350,14 @@ def train_model():
             input_values={
                 X: X_batch,
                 y_groundtruth: y_batch,
-                W_Q: torch.tensor(W_Q_val),
-                W_K: torch.tensor(W_K_val),
-                W_V: torch.tensor(W_V_val),
-                W_O: torch.tensor(W_O_val),
-                W_1: torch.tensor(W_1_val),
-                b_1: torch.tensor(b_1_val),
-                W_2: torch.tensor(W_2_val),
-                b_2: torch.tensor(b_2_val),
+                W_Q: W_Q_val,
+                W_K: W_K_val,
+                W_V: W_V_val,
+                W_O: W_O_val,
+                W_1: W_1_val,
+                b_1: b_1_val,
+                W_2: W_2_val,
+                b_2: b_2_val,
             }
         )
         return result
