@@ -378,7 +378,6 @@ class ExpandAsOp3d(Op):
         """Return the broadcasted tensor."""
         assert len(input_values) == 2
         input_tensor, target_tensor = input_values
-        print("expand_op", input_tensor.shape, target_tensor.shape)
         return input_tensor.unsqueeze(1).expand_as(target_tensor)
 
     def gradient(self, node: Node, output_grad: Node) -> List[Node]:
@@ -920,9 +919,6 @@ def gradients(output_node: Node, nodes: List[Node]) -> List[Node]:
 
         # accumulate into each input's grad
         for inp, g_inp in zip(node.inputs, input_grads):
-            # Skip placeholders - they don't need gradients computed through them
-            if isinstance(inp.op, PlaceholderOp):
-                continue
             if inp in node_to_grad:
                 # accumulate gradient to each input existing gradient
                 node_to_grad[inp] = node_to_grad[inp] + g_inp

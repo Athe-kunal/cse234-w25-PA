@@ -265,11 +265,12 @@ def train_model():
         X, model_weights_nodes, model_dim, seq_length, eps, batch_size, num_classes
     )
 
-    # Average over sequence length for classification
-    # y_predict is (batch_size, seq_length, num_classes), need to average to (batch_size, num_classes)
-    y_predict_avg = ad.mean(
-        y_predict, dim=(1,), keepdim=False
-    )  # (batch_size, num_classes)
+    # Average over sequence length for classification without triggering expand broadcast issues
+    # y_predict is (batch_size, seq_length, num_classes)
+    # Sum over seq_length then divide to keep shape (batch_size, num_classes)
+    y_predict_avg = ad.div_by_const(
+        ad.sum_op(y_predict, dim=(1,), keepdim=False), seq_length
+    )
 
     # Build loss graph
     loss: ad.Node = softmax_loss(y_predict_avg, y_groundtruth, batch_size)
