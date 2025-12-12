@@ -1,6 +1,7 @@
 from mpi4py import MPI
 import numpy as np
 
+
 class Communicator(object):
     def __init__(self, comm: MPI.Comm):
         self.comm = comm
@@ -18,6 +19,7 @@ class Communicator(object):
     def Allreduce(self, src_array, dest_array, op=MPI.SUM):
         assert src_array.size == dest_array.size
         src_array_byte = src_array.itemsize * src_array.size
+        # Get_size() gives the world size
         self.total_bytes_transferred += src_array_byte * 2 * (self.comm.Get_size() - 1)
         self.comm.Allreduce(src_array, dest_array, op)
 
@@ -42,12 +44,12 @@ class Communicator(object):
         nprocs = self.comm.Get_size()
 
         # Ensure that the arrays can be evenly partitioned among processes.
-        assert src_array.size % nprocs == 0, (
-            "src_array size must be divisible by the number of processes"
-        )
-        assert dest_array.size % nprocs == 0, (
-            "dest_array size must be divisible by the number of processes"
-        )
+        assert (
+            src_array.size % nprocs == 0
+        ), "src_array size must be divisible by the number of processes"
+        assert (
+            dest_array.size % nprocs == 0
+        ), "dest_array size must be divisible by the number of processes"
 
         # Calculate the number of bytes in one segment.
         send_seg_bytes = src_array.itemsize * (src_array.size // nprocs)
@@ -64,30 +66,29 @@ class Communicator(object):
         """
         A manual implementation of all-reduce using a reduce-to-root
         followed by a broadcast.
-        
+
         Each non-root process sends its data to process 0, which applies the
         reduction operator (by default, summation). Then process 0 sends the
         reduced result back to all processes.
-        
+
         The transfer cost is computed as:
           - For non-root processes: one send and one receive.
           - For the root process: (n-1) receives and (n-1) sends.
         """
-        #TODO: Your code here
 
     def myAlltoall(self, src_array, dest_array):
         """
         A manual implementation of all-to-all where each process sends a
         distinct segment of its source array to every other process.
-        
+
         It is assumed that the total length of src_array (and dest_array)
         is evenly divisible by the number of processes.
-        
+
         The algorithm loops over the ranks:
           - For the local segment (when destination == self), a direct copy is done.
           - For all other segments, the process exchanges the corresponding
             portion of its src_array with the other process via Sendrecv.
-            
+
         The total data transferred is updated for each pairwise exchange.
         """
-        #TODO: Your code here
+        # TODO: Your code here
